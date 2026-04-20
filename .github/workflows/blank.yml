@@ -1,0 +1,45 @@
+name: LocalSend Debian10 arm64 AppImage 编译
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    # 用 GitHub 免费的 x86 运行器（能立刻执行）
+    runs-on: ubuntu-latest
+    steps:
+      - name: 启用 ARM64 模拟
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - name: 编译并打包
+        uses: addnab/docker-run-action@v3
+        with:
+          image: debian:10
+          options: --platform linux/arm64 -v ${{ github.workspace }}:/build
+          run: |
+            # 安装依赖
+            apt update && apt install -y git curl wget unzip cmake clang libgtk-3-dev ninja-build libayatana-appindicator3-dev
+            # 安装 Flutter
+            git clone https://github.com/flutter/flutter.git -b 3.13.9 /flutter
+            export PATH=$PATH:/flutter/bin
+            flutter config --no-analytics
+            # 下载源码
+            git clone https://github.com/localsend/localsend /app
+            cd /app
+            git checkout v1.15.6
+            # 编译
+            flutter pub get
+            flutter build linux --release
+            # 打包 AppImage
+            wget -O appimagetool https://github.com/AppImage/AppImageKit/releases/download/13/appimagetool-aarch64.AppImage
+            chmod +x appimagetool
+            cp -r build/linux/arm64/release/bundle/ LocalSend
+            ./appimagetool LocalSend
+            mv LocalSend-aarch64.AppImage /build/LocalSend-1.15.6-Debian10-arm64.AppImage
+
+      - name: 上传成品
+        uses: actions/upload-artifact@v4
+        with:
+          name: LocalSend-Debian10-arm64
+          path: LocalSend-1.15.6-Debian10-arm64.AppImage
